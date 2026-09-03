@@ -1,0 +1,16 @@
+# ============================================
+# DevTork AI Agent - Backend Dependencies
+# Phase 1: Only base server + config libraries.
+# AI, DB, and Auth libraries are added in later phases
+# (each will be explained when introduced).
+# ============================================
+
+# Web framework
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+
+# Settings / environment variable management
+pydantic==2.9.2
+pydantic-settings==2.6.0
+
+# CORS + basic utilities are built into FastAPI/Starlette, no extra package needed

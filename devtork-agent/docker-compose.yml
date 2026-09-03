@@ -1,0 +1,95 @@
+# ============================================================
+# DevTork AI Agent - Docker Compose
+#
+# WHAT THIS FILE DOES:
+# Defines and wires together every service the project needs so the
+# whole stack starts with one command: `docker compose up`.
+#
+# WHY DOCKER COMPOSE (vs running each service manually):
+# - One command starts frontend + backend + database + cache.
+# - Consistent versions across your machine and any teammate's
+#   machine (no "works on my machine" issues).
+# - Services can reach each other by service name (e.g. the backend
+#   connects to "db:5432" instead of a fragile localhost setup).
+#
+# PHASE 1 NOTE:
+# The `db` and `redis` services are defined now (infrastructure),
+# but the backend does NOT use them yet -- that wiring happens in
+# Phase 2 (database models) and later when background jobs are
+# introduced. Defining them now means you won't need to keep editing
+# this file every phase.
+# ============================================================
+
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: devtork_backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - db
+      - redis
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: devtork_frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+  # PostgreSQL with the pgvector extension pre-installed.
+  # NEW TOOL/TECHNOLOGY: pgvector
+  #   What it is: a PostgreSQL extension that adds a vector data type
+  #   and similarity-search operators.
+  #   Why we need it: Phase 7 (Knowledge Base + RAG) needs to store
+  #   embeddings (numeric vectors representing text meaning) and
+  #   search "which stored text is most similar to this question" --
+  #   pgvector does that directly inside Postgres, so we don't need
+  #   a separate vector database service.
+  #   Alternatives: Pinecone, Weaviate, Chroma (all either paid or an
+  #   extra service to run). pgvector wins for this project because
+  #   it's free, open-source, and reuses the database we already have.
+  #   Cost: free. No API key or account required (it just runs in
+  #   our own Postgres container).
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: devtork_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-devtork}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devtork_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-devtork_agent}
+    ports:
+      - "5432:5432"
+    volumes:
+      - devtork_pgdata:/var/lib/postgresql/data
+
+  # NEW TOOL/TECHNOLOGY: Redis
+  #   What it is: an in-memory key-value store.
+  #   Why we need it (later): caching frequent knowledge-base lookups,
+  #   and as a broker for background jobs (e.g. sending notification
+  #   emails without blocking the chat response).
+  #   Alternative: skip it and do everything synchronously -- fine for
+  #   an MVP with low traffic, which is why we don't wire it into any
+  #   code yet. It's included in the infrastructure now so adding
+  #   background jobs later doesn't require restructuring Docker.
+  #   Cost: free, open-source, no account needed.
+  redis:
+    image: redis:7-alpine
+    container_name: devtork_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+volumes:
+  devtork_pgdata:
